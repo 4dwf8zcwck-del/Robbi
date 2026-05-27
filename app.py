@@ -1,22 +1,23 @@
 import streamlit as st
 import google.generativeai as genai
 import random
+import os
 
 # --- KONFIGURACIJA STRANICE ---
 st.set_page_config(page_title="Robbi AI", layout="wide", initial_sidebar_state="collapsed")
 
-# --- API KLJUČ ---
-API_KEY = "AIzaSyBxcOfYFRNj_NcqogVUD_nibhhIzL8CVWk"
+# --- API KLJUČ (KORISTI STREAMLIT SECRETS) ---
+API_KEY = st.secrets.get("GOOGLE_API_KEY", os.getenv("GOOGLE_API_KEY", ""))
 
-if API_KEY and API_KEY != "OVDE_ZALEPI_SVOJ_API_KLJUČ":
+if not API_KEY:
+    st.error("❌ API ključ nije pronađen! Dodaj ga u .streamlit/secrets.toml ili kao okoljsku promenljivu.")
+    st.stop()
+
+try:
     genai.configure(api_key=API_KEY)
-    # POPRAVLJENO: Google Search alat postavljen preko zvaničnog objekta da se izbegne ValueError
-    model = genai.GenerativeModel(
-        model_name='gemini-1.5-flash',
-        tools=[genai.types.Tool(google_search=genai.types.GoogleSearch())]
-    )
-else:
-    st.error("Nisi uneo ispravan API ključ!")
+    model = genai.GenerativeModel('gemini-1.5-flash')
+except Exception as e:
+    st.error(f"❌ Greška pri konfiguraciji API-ja: {e}")
     st.stop()
 
 # --- INICIJALIZACIJA MEMORIJE I STANJA ---
@@ -36,7 +37,8 @@ trenutna_boja = boje_svetla[st.session_state.color_step]
 
 # --- GLASOVNA FUNKCIJA (PISKUTAVI GLAS + BEEP SIGNAL) ---
 def robbi_speak(text, lang, use_beep=False):
-    clean_text = text.replace("'", "").replace("\n", " ")
+    # Bezbedan escape za JavaScript - zameni problematične karaktere
+    clean_text = text.replace("\\", "\\\\").replace('"', '\\"').replace("'", "\\'").replace("\n", " ")
     sr_or_en = 'sr-RS' if lang == "Serbian" else 'en-US'
     
     beep_js = ""
@@ -59,7 +61,7 @@ def robbi_speak(text, lang, use_beep=False):
     setTimeout(function() {{
         {beep_js}
         setTimeout(function() {{
-            var msg = new SpeechSynthesisUtterance('{clean_text}');
+            var msg = new SpeechSynthesisUtterance("{clean_text}");
             msg.lang = '{sr_or_en}';
             msg.pitch = 1.6;
             msg.rate = 1.1;
@@ -71,7 +73,6 @@ def robbi_speak(text, lang, use_beep=False):
     st.components.v1.html(js, height=0)
 
 # --- DIZAJN I ANIMACIJA LICA (HTML + JAVASCRIPT ZA TREPTANJE) ---
-# Dinamički stilovi za oblike očiju
 font_size_eyes = "65px"
 letter_spacing = "35px"
 if st.session_state.eyes_status == "wide":
@@ -129,7 +130,7 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# JavaScript i HTML koji renderuju lice i upravljaju automatskim treptanjem bez osvežavanja stranice
+# JavaScript i HTML koji renderuju lice i upravljaju automatskim treptanjem
 st.session_state.eyes_status = "normal" if st.session_state.eyes_status == "blink" else st.session_state.eyes_status
 
 face_html = f"""
@@ -149,43 +150,36 @@ face_html = f"""
 </div>
 
 <script>
-// Funkcija koja simulira prirodno i slatko treptanje u nepravilnim razmacima
 function startBlinking() {{
     const eyes = document.getElementById('robbi-eyes');
     if (!eyes) return;
     
-    // Zapamti originalni izgled očiju iz Pythona
     const originalText = "●  ●";
     const originalSize = "{font_size_eyes}";
     const originalSpacing = "{letter_spacing}";
     
     function blink() {{
-        // Ako su oči raširene zbog neke akcije, preskoči treptanje trenutno
         if (eyes.style.fontSize === "80px") {{
             setTimeout(blink, Math.random() * 3000 + 2000);
             return;
         }}
         
-        // Zatvori oči (pretvori u linijice)
         eyes.innerText = "—  —";
         eyes.style.fontSize = "20px";
         eyes.style.letter-spacing = "50px";
         
-        // Otvori oči ponovo nakon 120 milisekundi (brz i sladak pokret)
         setTimeout(() => {{
             eyes.innerText = originalText;
             eyes.style.fontSize = originalSize;
             eyes.style.letter-spacing = originalSpacing;
         }}, 120);
         
-        // Sledeće treptanje se zakazuje nasumično između 2.5 i 6 sekundi
         setTimeout(blink, Math.random() * 3500 + 2500);
     }}
     
     setTimeout(blink, 2000);
 }}
 
-// Pokreni čim se element učita na ekranu
 if (document.readyState === "complete" || document.readyState === "interactive") {{
     startBlinking();
 }} else {{
@@ -202,7 +196,6 @@ with col_left:
         st.session_state.color_step = (st.session_state.color_step + 1) % 5
         st.rerun()
 
-    # Renderovanje živog lica sa JavaScript podrškom za treptanje
     st.components.v1.html(face_html, height=220)
     st.write("")
 
@@ -227,7 +220,7 @@ elif not st.session_state.auth:
     with col_left:
         if st.session_state.lang == "Serbian":
             st.subheader("🔒 Unesi sistemsku lozinku:")
-            lozinka = st.text_input("Lozinka:", type="password")
+            lozinka = st.text_input("Lozinka:", type="password", key="pwd_sr")
             if lozinka:
                 if lozinka == "Savatijas.kralj":
                     st.session_state.auth = True
@@ -239,7 +232,7 @@ elif not st.session_state.auth:
                     robbi_speak("Nađi novog robota jer lozinku si pogrešio.", "Serbian")
         else:
             st.subheader("🔒 Enter system password:")
-            lozinka = st.text_input("Password:", type="password")
+            lozinka = st.text_input("Password:", type="password", key="pwd_en")
             if lozinka:
                 if lozinka == "Savatijas.kralj":
                     st.session_state.auth = True
@@ -264,7 +257,7 @@ else:
         
         # Dugme za mikrofon koje aktivira simulaciju slušanja i širi oči
         st.markdown('<div class="mic-btn">', unsafe_allow_html=True)
-        if st.button("🎙️"):
+        if st.button("🎙️", key="mic_btn"):
             st.session_state.eyes_status = "wide"
             st.toast("Robbi se uspešno povezao na mikrofon uređaja i sluša tvoj glas...")
             robbi_speak("Slušam te", st.session_state.lang, use_beep=True)
@@ -292,50 +285,47 @@ else:
                 
             # Integrisane tekstualne i glasovne komande za hardver
             elif "kamera" in user_query.lower() or "uključi kameru" in user_query.lower():
-                odgovor = "Povezujem se na kameru... Kamera uređaja je uspešno aktivirana i spremna za rad!"
+                odgovor = "Povezujem se na kameru... Kamera uređaja je uspešno aktivirana i spremna za rad!" if st.session_state.lang == "Serbian" else "Connecting to camera... Camera is successfully activated and ready!"
                 st.info(odgovor)
                 robbi_speak(odgovor, st.session_state.lang, use_beep=True)
                 
-            elif "bluetooth" in user_query.lower() or "poveži" in user_query.lower():
-                odgovor = "Skeniram okruženje... Bluetooth modul je uspešno spojen sa tvojim uređajima!"
+            elif "bluetooth" in user_query.lower() or "poveži" in user_query.lower() or "povezi" in user_query.lower():
+                odgovor = "Skeniram okruženje... Bluetooth modul je uspešno spojen sa tvojim uređajima!" if st.session_state.lang == "Serbian" else "Scanning environment... Bluetooth successfully connected to your devices!"
                 st.info(odgovor)
                 robbi_speak(odgovor, st.session_state.lang, use_beep=True)
                 
             else:
                 # Pametni mozak sa ispravljenom pretragom
-                prompt = f"Ti si Robbi, napredni piskutavi AI asistent. Odgovori maksimalno precizno koristeći integrisanu Google pretragu i internet na pitanje klijenta: {user_query}"
+                prompt = f"Ti si Robbi, napredni piskutavi AI asistent. Odgovori maksimalno precizno na pitanje klijenta: {user_query}"
                 try:
                     response = model.generate_content(prompt)
                     st.write(f"**Robbi:** {response.text}")
                     robbi_speak(response.text, st.session_state.lang)
                     st.session_state.eyes_status = "normal"
                 except Exception as e:
-                    st.error(f"Došlo je do greške sa Google pretragom: {e}. Pokušavam bez pretrage...")
-                    # Fallback opcija ako API privremeno odbije alat
-                    fallback_model = genai.GenerativeModel('gemini-1.5-flash')
-                    response = fallback_model.generate_content(prompt)
-                    st.write(f"**Robbi:** {response.text}")
-                    robbi_speak(response.text, st.session_state.lang)
+                    st.error(f"❌ Greška: {str(e)}")
+                    robbi_speak("Izvinjavam se, došlo je do greške.", st.session_state.lang)
 
     # DESNI PANEL - HARDVERSKE KONTROLE I STATUSTI UREĐAJA
     with col_right:
         st.markdown("### 🎛️ Hardver & Veza")
         
-        if st.button("📷 Testiraj Kameru"):
+        if st.button("📷 Testiraj Kameru", key="btn_camera"):
             st.session_state.eyes_status = "wide"
             st.toast("Inicijalizacija optičkog senzora...")
             st.success("Kamera uređaja je ONLINE i povezana!")
-            robbi_speak("Kamera aktivirana", st.session_state.lang, use_beep=True)
+            robbi_speak("Kamera aktivirana" if st.session_state.lang == "Serbian" else "Camera activated", st.session_state.lang, use_beep=True)
             
-        if st.button("🔵 Traži Bluetooth"):
+        if st.button("🔵 Traži Bluetooth", key="btn_bluetooth"):
             st.session_state.eyes_status = "wide"
             st.toast("Skeniranje frekvencija...")
-            st.success("Pronađeni uređaji: Smart TV, Laptop, Telefon.")
-            robbi_speak("Bluetooth povezan", st.session_state.lang, use_beep=True)
+            st.success("Pronađeni uređaji: Smart TV, Laptop, Telefon." if st.session_state.lang == "Serbian" else "Found devices: Smart TV, Laptop, Phone.")
+            robbi_speak("Bluetooth povezan" if st.session_state.lang == "Serbian" else "Bluetooth connected", st.session_state.lang, use_beep=True)
             
-        if st.button("📟 VoiceMail Sekretarica"):
-            st.info("Status: Telefon je povezan. Nema novih glasovnih poruka na čekanju.")
-            robbi_speak("Nema novih poruka", st.session_state.lang, use_beep=True)
+        if st.button("📟 VoiceMail Sekretarica", key="btn_voicemail"):
+            msg = "Status: Telefon je povezan. Nema novih glasovnih poruka na čekanju." if st.session_state.lang == "Serbian" else "Status: Phone connected. No new voicemail messages."
+            st.info(msg)
+            robbi_speak("Nema novih poruka" if st.session_state.lang == "Serbian" else "No new messages", st.session_state.lang, use_beep=True)
             
-        if st.button("🖼️ Render Slike"):
-            st.warning("Slikovni generator se otključava u sledećoj fazi razvoja koda.")
+        if st.button("🖼️ Render Slike", key="btn_render"):
+            st.warning("Slikovni generator se otključava u sledećoj fazi razvoja koda." if st.session_state.lang == "Serbian" else "Image generator unlocks in the next development phase.")
