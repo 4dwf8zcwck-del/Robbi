@@ -10,10 +10,10 @@ API_KEY = "AIzaSyBxcOfYFRNj_NcqogVUD_nibhhIzL8CVWk"
 
 if API_KEY and API_KEY != "OVDE_ZALEPI_SVOJ_API_KLJUČ":
     genai.configure(api_key=API_KEY)
-    # Aktivacija stabilnog modela sa integrisanim Google Search alatom za internet uživo
+    # POPRAVLJENO: Google Search alat postavljen preko zvaničnog objekta da se izbegne ValueError
     model = genai.GenerativeModel(
         model_name='gemini-1.5-flash',
-        tools=[{"google_search": {}}]
+        tools=[genai.types.Tool(google_search=genai.types.GoogleSearch())]
     )
 else:
     st.error("Nisi uneo ispravan API ključ!")
@@ -25,7 +25,7 @@ if "auth" not in st.session_state:
 if "lang" not in st.session_state:
     st.session_state.lang = None
 if "eyes_status" not in st.session_state:
-    st.session_state.eyes_status = "normal"  # normal, wide, blink, happy
+    st.session_state.eyes_status = "normal"  # normal, wide, happy
 if "color_step" not in st.session_state:
     st.session_state.color_step = 0
 if "kalendar" not in st.session_state:
@@ -33,12 +33,6 @@ if "kalendar" not in st.session_state:
 
 boje_svetla = ["#00d4ff", "#ff4b4b", "#ffdd00", "#00ff66", "#ffffff"]
 trenutna_boja = boje_svetla[st.session_state.color_step]
-
-# Nasumično treptanje pri svakom osvežavanju stranice
-if st.session_state.eyes_status == "normal" and random.random() < 0.3:
-    st.session_state.eyes_status = "blink"
-elif st.session_state.eyes_status == "blink":
-    st.session_state.eyes_status = "normal"
 
 # --- GLASOVNA FUNKCIJA (PISKUTAVI GLAS + BEEP SIGNAL) ---
 def robbi_speak(text, lang, use_beep=False):
@@ -54,10 +48,10 @@ def robbi_speak(text, lang, use_beep=False):
         oscillator.connect(gainNode);
         gainNode.connect(audioCtx.destination);
         oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // Piskutav piskavi zvuk
-        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+        gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
         oscillator.start();
-        oscillator.stop(audioCtx.currentTime + 0.15);
+        oscillator.stop(audioCtx.currentTime + 0.12);
         """
 
     js = f"""
@@ -70,69 +64,135 @@ def robbi_speak(text, lang, use_beep=False):
             msg.pitch = 1.6;
             msg.rate = 1.1;
             window.speechSynthesis.speak(msg);
-        }}, {200 if use_beep else 0});
+        }}, {180 if use_beep else 0});
     }}, 100);
     </script>
     """
     st.components.v1.html(js, height=0)
 
-# --- DIZAJN LICA I INTERFEJSA (CSS) ---
-font_size_eyes = "55px"
-letter_spacing = "30px"
+# --- DIZAJN I ANIMACIJA LICA (HTML + JAVASCRIPT ZA TREPTANJE) ---
+# Dinamički stilovi za oblike očiju
+font_size_eyes = "65px"
+letter_spacing = "35px"
 if st.session_state.eyes_status == "wide":
-    font_size_eyes = "75px"
+    font_size_eyes = "80px"
     letter_spacing = "25px"
-elif st.session_state.eyes_status == "blink":
-    font_size_eyes = "15px"
-    letter_spacing = "45px"
 
+# Određivanje oblika usta
+if not st.session_state.auth:
+    usta_oblik = "✕"
+elif st.session_state.eyes_status == "happy":
+    usta_oblik = "▽"
+else:
+    usta_oblik = "◡"
+
+# CSS Stilizacija kućišta i elemenata
 st.markdown(f"""
 <style>
     .robbi-case {{
-        background-color: #120a21;
-        border-radius: 40px;
-        padding: 30px;
+        background-color: #0b0514;
+        border-radius: 45px;
+        padding: 35px 20px;
         text-align: center;
         border: 8px solid {trenutna_boja};
-        width: 280px;
+        width: 300px;
         margin: 0 auto;
-        box-shadow: 0px 0px 20px {trenutna_boja}44;
-    }}
-    .eyes {{
-        color: {trenutna_boja};
-        font-size: {font_size_eyes};
-        font-weight: bold;
-        letter-spacing: {letter_spacing};
-        transition: all 0.1s ease-in-out;
-        height: 90px;
-        line-height: 90px;
+        box-shadow: 0px 0px 25px {trenutna_boja}55;
     }}
     .mouth {{
         color: {trenutna_boja};
-        font-size: 45px;
-        margin-top: -10px;
-        height: 50px;
+        font-size: 50px;
+        margin-top: 5px;
+        height: 60px;
+        line-height: 60px;
+        font-family: Arial, sans-serif;
     }}
     .stButton>button {{
         width: 100%;
         background-color: #1f143a;
         color: white;
         border: 2px solid {trenutna_boja};
-        border-radius: 10px;
+        border-radius: 12px;
+        padding: 10px;
     }}
     .mic-btn>button {{
         background-color: {trenutna_boja} !important;
         color: black !important;
-        font-size: 30px !important;
+        font-size: 32px !important;
         border-radius: 50% !important;
-        width: 80px !important;
-        height: 80px !important;
+        width: 85px !important;
+        height: 85px !important;
         margin: 0 auto !important;
         display: block !important;
-        box-shadow: 0px 0px 15px {trenutna_boja};
+        box-shadow: 0px 0px 20px {trenutna_boja};
     }}
 </style>
 """, unsafe_allow_html=True)
+
+# JavaScript i HTML koji renderuju lice i upravljaju automatskim treptanjem bez osvežavanja stranice
+st.session_state.eyes_status = "normal" if st.session_state.eyes_status == "blink" else st.session_state.eyes_status
+
+face_html = f"""
+<div class="robbi-case">
+    <div id="robbi-eyes" style="
+        color: {trenutna_boja};
+        font-size: {font_size_eyes};
+        font-weight: bold;
+        letter-spacing: {letter_spacing};
+        transition: all 0.05s ease-in-out;
+        height: 90px;
+        line-height: 90px;
+        font-family: Arial, sans-serif;
+        user-select: none;
+    ">●  ●</div>
+    <div class="mouth">{usta_oblik}</div>
+</div>
+
+<script>
+// Funkcija koja simulira prirodno i slatko treptanje u nepravilnim razmacima
+function startBlinking() {{
+    const eyes = document.getElementById('robbi-eyes');
+    if (!eyes) return;
+    
+    // Zapamti originalni izgled očiju iz Pythona
+    const originalText = "●  ●";
+    const originalSize = "{font_size_eyes}";
+    const originalSpacing = "{letter_spacing}";
+    
+    function blink() {{
+        // Ako su oči raširene zbog neke akcije, preskoči treptanje trenutno
+        if (eyes.style.fontSize === "80px") {{
+            setTimeout(blink, Math.random() * 3000 + 2000);
+            return;
+        }}
+        
+        // Zatvori oči (pretvori u linijice)
+        eyes.innerText = "—  —";
+        eyes.style.fontSize = "20px";
+        eyes.style.letter-spacing = "50px";
+        
+        // Otvori oči ponovo nakon 120 milisekundi (brz i sladak pokret)
+        setTimeout(() => {{
+            eyes.innerText = originalText;
+            eyes.style.fontSize = originalSize;
+            eyes.style.letter-spacing = originalSpacing;
+        }}, 120);
+        
+        // Sledeće treptanje se zakazuje nasumično između 2.5 i 6 sekundi
+        setTimeout(blink, Math.random() * 3500 + 2500);
+    }}
+    
+    setTimeout(blink, 2000);
+}}
+
+// Pokreni čim se element učita na ekranu
+if (document.readyState === "complete" || document.readyState === "interactive") {{
+    startBlinking();
+}} else {{
+    document.addEventListener("DOMContentLoaded", startBlinking);
+}}
+</script>
+"""
 
 # PODELA NA LEVI I DESNI PANEL
 col_left, col_right = st.columns([3, 1])
@@ -140,28 +200,13 @@ col_left, col_right = st.columns([3, 1])
 with col_left:
     if st.button("🎭 Dodirni ekran (Promeni boju svetla)"):
         st.session_state.color_step = (st.session_state.color_step + 1) % 5
-        st.session_state.eyes_status = "normal"
         st.rerun()
 
-    # Postavljanje oblika usta i očiju u zavisnosti od stanja aplikacije
-    if not st.session_state.auth:
-        usta_oblik = "✕"
-    elif st.session_state.eyes_status == "happy":
-        usta_oblik = "▽"
-    else:
-        usta_oblik = "◡"
-
-    oči_oblik = "●  ●" if st.session_state.eyes_status != "blink" else "—  —"
-    
-    st.markdown(f"""
-    <div class="robbi-case">
-        <div class="eyes">{oči_oblik}</div>
-        <div class="mouth">{usta_oblik}</div>
-    </div>
-    """, unsafe_allow_html=True)
+    # Renderovanje živog lica sa JavaScript podrškom za treptanje
+    st.components.v1.html(face_html, height=220)
     st.write("")
 
-# --- TOK LOGIKE ---
+# --- TOK LOGIKE APLIKACIJE ---
 
 # 1. KORAK: Izbor jezika
 if st.session_state.lang is None:
@@ -187,7 +232,7 @@ elif not st.session_state.auth:
                 if lozinka == "Savatijas.kralj":
                     st.session_state.auth = True
                     st.session_state.eyes_status = "happy"
-                    robbi_speak("Sistem otključan. Ja sam Robbi, tvoj lični pametni asistent.", "Serbian", use_beep=True)
+                    robbi_speak("Sistem otključano. Ja sam Robbi, tvoj lični pametni asistent.", "Serbian", use_beep=True)
                     st.rerun()
                 else:
                     st.error("Nađi novog robota jer lozinku si pogrešio.")
@@ -221,12 +266,11 @@ else:
         st.markdown('<div class="mic-btn">', unsafe_allow_html=True)
         if st.button("🎙️"):
             st.session_state.eyes_status = "wide"
-            st.toast("Robbi se uspešno povezao na mikrofon uređaja i sluša tvog glas...")
+            st.toast("Robbi se uspešno povezao na mikrofon uređaja i sluša tvoj glas...")
             robbi_speak("Slušam te", st.session_state.lang, use_beep=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
         if user_query:
-            # Kada razmišlja i odgovara, oči se malo prošire
             st.session_state.eyes_status = "wide"
             
             # Kalendar i komande pamćenja
@@ -246,7 +290,7 @@ else:
                 st.session_state.eyes_status = "normal"
                 st.rerun()
                 
-            # Ručne glasovne/tekstualne komande za povezivanje uređaja
+            # Integrisane tekstualne i glasovne komande za hardver
             elif "kamera" in user_query.lower() or "uključi kameru" in user_query.lower():
                 odgovor = "Povezujem se na kameru... Kamera uređaja je uspešno aktivirana i spremna za rad!"
                 st.info(odgovor)
@@ -258,7 +302,7 @@ else:
                 robbi_speak(odgovor, st.session_state.lang, use_beep=True)
                 
             else:
-                # Pametni mozak sa punim pristupom Google Search-u
+                # Pametni mozak sa ispravljenom pretragom
                 prompt = f"Ti si Robbi, napredni piskutavi AI asistent. Odgovori maksimalno precizno koristeći integrisanu Google pretragu i internet na pitanje klijenta: {user_query}"
                 try:
                     response = model.generate_content(prompt)
@@ -266,7 +310,12 @@ else:
                     robbi_speak(response.text, st.session_state.lang)
                     st.session_state.eyes_status = "normal"
                 except Exception as e:
-                    st.error(f"Došlo je do sistemske greške sa Google API-jem: {e}")
+                    st.error(f"Došlo je do greške sa Google pretragom: {e}. Pokušavam bez pretrage...")
+                    # Fallback opcija ako API privremeno odbije alat
+                    fallback_model = genai.GenerativeModel('gemini-1.5-flash')
+                    response = fallback_model.generate_content(prompt)
+                    st.write(f"**Robbi:** {response.text}")
+                    robbi_speak(response.text, st.session_state.lang)
 
     # DESNI PANEL - HARDVERSKE KONTROLE I STATUSTI UREĐAJA
     with col_right:
