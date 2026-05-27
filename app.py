@@ -285,12 +285,12 @@ else:
                 
             # Integrisane tekstualne i glasovne komande za hardver
             elif "kamera" in user_query.lower() or "uključi kameru" in user_query.lower():
-                odgovor = "Povezujem se na kameru... Kamera uređaja je uspešno aktivirana i spremna za rad!" if st.session_state.lang == "Serbian" else "Connecting to camera... Camera is successfully activated and ready!"
+                odgovor = "Povezujem se na kameru... Kamera uređaja je uspešno aktivirana i spremna za rad!" if st.session_state.lang == "Serbian" else "Connecting to camera... Camera is successfully activated and ready to use!"
                 st.info(odgovor)
                 robbi_speak(odgovor, st.session_state.lang, use_beep=True)
                 
             elif "bluetooth" in user_query.lower() or "poveži" in user_query.lower() or "povezi" in user_query.lower():
-                odgovor = "Skeniram okruženje... Bluetooth modul je uspešno spojen sa tvojim uređajima!" if st.session_state.lang == "Serbian" else "Scanning environment... Bluetooth successfully connected to your devices!"
+                odgovor = "Skeniram okruženje... Bluetooth modul je uspešno spojen sa tvojim uređajima!" if st.session_state.lang == "Serbian" else "Scanning environment... Bluetooth module successfully connected to your devices!"
                 st.info(odgovor)
                 robbi_speak(odgovor, st.session_state.lang, use_beep=True)
                 
