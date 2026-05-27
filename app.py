@@ -338,4 +338,4 @@ else:
             robbi_speak("Nema novih poruka", st.session_state.lang, use_beep=True)
             
         if st.button("🖼️ Render Slike"):
-            st.warning("Slikovni generator se otključava u sledećoj fazi razvoja koda."
+            st.warning("Slikovni generator se otključava u sledećoj fazi razvoja koda.")
