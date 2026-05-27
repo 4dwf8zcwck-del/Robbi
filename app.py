@@ -9,7 +9,7 @@ st.set_page_config(page_title="Robbi AI", layout="wide", initial_sidebar_state="
 # OVDE UMESTO AIza... STAVI SVOJ KLJUČ I OBAVEZNO OSTAVI NAVODNIKE!
 API_KEY = "AIzaSyAf3zIiLRb3Y-vwvuVl7zwAhtNu1dUafxY"
 
-if API_KEY != ":
+if API_KEY != "OVDE_ZALEPI_SVOJ_API_KLJUČ":
     genai.configure(api_key=API_KEY)
     model = genai.GenerativeModel('gemini-1.5-flash-latest')
 else:
